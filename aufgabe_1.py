@@ -18,9 +18,28 @@ def load_all_years():
 
     return df
 
+# Anhand von Kommentar richtung1 und richtung2 bestimmen
+def interpolate_plausible_values(df: pd.DataFrame):
+    for i in df.index:
+        if  df.at[i, "kommentar"] in {"Baustelle", "Radweg vereist / nach Schneefall nicht geräumt / keine Messung möglich", "Zählstelle noch nicht in Betrieb" }:
+            # "Baustelle" oder "Radweg vereist / nach Schneefall nicht geräumt / keine Messung möglich" --> 0en
+            df.at[i, "richtung_1"] = df.at[i, "richtung_2"] = df.at[i, "gesamt"] = 0
+            print("Kommentar: " + df.at[i, "kommentar"] + "; date: " + str(df.at[i, "datum"]) + "; stelle: " + df.at[i, "zaehlstelle"])
+        elif df.at[i, "kommentar"] in {"Ausfall", "Austausch Sensor", "Ausfall, baustellenbedingte Demontage  ", "Ausfall nach Beschädigung"}:
+            # "Ausfall" oder "Austausch Sensor" oder "Ausfall, baustellenbedingte Demontage  " "Ausfall nach Beschädigung"--> Mittelwert 
+            median1:float = df["richtung_1"].median(skipna=True, numeric_only=True)
+            df.at[i,'richtung_1'] = median1
 
-def interpolate_plausible_values(df):
-    pass
+            median2:float = df["richtung_2"].median(skipna=True, numeric_only=True)
+            df.at[i,'richtung_2'] = median2
+
+            df.at[i,'gesamt'] = median1 + median2
+            print("Kommentar: " + df.at[i, "kommentar"] + "; date: " + str(df.at[i,"datum"]) + "; stelle: " + df.at[i,"zaehlstelle"])
+        elif df.at[i, "kommentar"] in {"Kein Kommentar"}:
+            print("Kein Kommentar")
+        else:
+            print("Hinweis: unbekanntes Kommentar" + " date: " + str(df.at[i, "datum"]) + "; stelle: " + df.at[i, "zaehlstelle"])
+    return df
 
 
 def clean_data(df):
@@ -43,9 +62,11 @@ def clean_data(df):
         # Bereinigung: Ersetze negative Werte durch NaN in relevanten Spalten
         df.loc[df[col] < 0, col] = np.nan
 
-    # SPÄTER UMÄNDERN: Fehlende Werte in Wetterdaten durch Mittelwert ersetzen
+    # SPÄTER UMÄNDERN: Fehlende Werte in ricchtungen und gesamt durch Mittelwert ersetzen
+    df = interpolate_plausible_values(df)
+
     # JETZT: Fehlende Werte rauswerfen
-    df = df.dropna()
+    # df = df.dropna()
 
     df.to_csv("data_cleaned.csv", index=False)
 
@@ -117,7 +138,6 @@ def create_descriptive_statistics(df):
         .round(2)
     )
     print(weather_correlations)
-
 
 def main():
     # Daten laden und bereinigen
