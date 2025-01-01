@@ -1,9 +1,13 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 from datetime import datetime
+from matplotlib.ticker import FuncFormatter
+import calendar
 
 # TODO: Default-Wert für year_range ändern
-DEFAULT_YEAR_RANGE = [2008, 2024]
+DEFAULT_YEAR_RANGE = [2008, 2016]
 
 dtypes = {
     "datum": str,
@@ -34,7 +38,7 @@ def load_all_years(year_range=DEFAULT_YEAR_RANGE):
 
     df = pd.concat(dfs, ignore_index=True)
     df.sort_values("datum", inplace=True)
-    df.to_csv("data_raw.csv", index=False)
+    # df.to_csv("data_raw.csv", index=False)
 
     return df
 
@@ -115,10 +119,10 @@ def clean_data(df):
         df.loc[df[col] < 0, col] = np.nan
 
     # SPÄTER UMÄNDERN: Fehlende Werte in ricchtungen und gesamt durch Mittelwert ersetzen
-    # df = interpolate_plausible_values(df)
+    df = interpolate_plausible_values(df)
 
     # JETZT: Fehlende Werte rauswerfen
-    df = df.dropna()
+    # df = df.dropna()
 
     df.to_csv("data_cleaned.csv", index=False)
 
@@ -203,7 +207,150 @@ def create_descriptive_statistics(df):
     )
 
     print(weather_correlations_df)
-    # print(weather_correlations)
+
+
+def format_number(x, p):
+    """Formatiert Zahlen in lesbare Strings (K = Tausend, M = Million)"""
+    if x >= 1e6:
+        return f"{x/1e6:.1f}M"
+    elif x >= 1e3:
+        return f"{x/1e3:.0f}K"
+    else:
+        return f"{x:.0f}"
+
+
+def analyze_outages(daily_data):
+    """Analysiert die Ausfallzeiten mit detaillierten Visualisierungen"""
+    # plt.style.use("whitegrid")
+
+    # Ausfälle nach Typ gruppieren
+    outage_types = (
+        daily_data[daily_data["kommentar"] != "Kein Kommentar"]
+        .groupby("kommentar")
+        .size()
+    )
+
+    # Visualisierung der Ausfalltypen
+    plt.figure(figsize=(15, 6))
+    outage_types.plot(kind="bar")
+    plt.title("Verteilung der Ausfalltypen")
+    plt.xlabel("Ausfallgrund")
+    plt.ylabel("Anzahl")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.savefig("outage_types.png")
+    plt.close()
+
+    # Zeitliche Entwicklung der Ausfälle
+    daily_data["year"] = daily_data["datum"].dt.year
+    daily_data["month"] = daily_data["datum"].dt.month
+
+    monthly_outages = (
+        daily_data[daily_data["kommentar"] != "Kein Kommentar"]
+        .groupby(["year", "month"])
+        .size()
+        .reset_index(name="outages")
+    )
+
+    plt.figure(figsize=(15, 6))
+    sns.lineplot(data=monthly_outages, x="month", y="outages", hue="year")
+    plt.title("Entwicklung der Ausfälle über die Zeit")
+    plt.xlabel("Monat")
+    plt.ylabel("Anzahl Ausfälle")
+    plt.legend(title="Jahr", bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.tight_layout()
+    plt.savefig("outages_timeline.png")
+    plt.close()
+
+    return monthly_outages
+
+
+def analyze_usage_trends(daily_data):
+    """Analysiert die Nutzungstrends mit verschiedenen Zeitfenstern"""
+    # Jahrestrend
+    yearly_usage = (
+        daily_data.groupby(daily_data["datum"].dt.year)["gesamt"]
+        .agg(["sum", "mean", "std"])
+        .round(2)
+    )
+
+    # Visualisierung Jahrestrend
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12))
+
+    yearly_usage["sum"].plot(kind="bar", ax=ax1)
+    ax1.set_title("Jährliche Gesamtnutzung")
+    ax1.set_xlabel("Jahr")
+    ax1.set_ylabel("Fahrten (jährlich)")
+    ax1.yaxis.set_major_formatter(FuncFormatter(format_number))
+    ax1.grid(axis="y", linestyle="-", alpha=0.3)
+    plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha="right")
+
+    line = ax2.plot(
+        yearly_usage.index,
+        yearly_usage["mean"],
+        marker="o",
+        color="steelblue",
+        label="Durchschnittliche Nutzung",
+    )
+    std_area = ax2.fill_between(
+        yearly_usage.index,
+        yearly_usage["mean"] - yearly_usage["std"],
+        yearly_usage["mean"] + yearly_usage["std"],
+        alpha=0.2,
+        color="steelblue",
+        label="Standardabweichung",
+    )
+    ax2.set_title("Durchschnittliche tägliche Nutzung pro Jahr")
+    ax2.set_xlabel("Jahr")
+    ax2.set_ylabel("Durchschnittliche Nutzung")
+    ax2.yaxis.set_major_formatter(FuncFormatter(format_number))
+    ax2.grid(axis="y", linestyle="-", alpha=0.7)
+    ax2.legend(loc="upper left")
+
+    plt.tight_layout()
+    plt.savefig("yearly_usage_trends.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    return yearly_usage
+
+
+def analyze_weather_impact(daily_data):
+    """Erweiterte Wettereinfluss-Analyse mit Schwellenwerten"""
+    # Korrelationsmatrix
+    weather_cols = ["max.temp", "niederschlag", "sonnenstunden", "bewoelkung", "gesamt"]
+    corr_matrix = daily_data[weather_cols].corr()
+
+    # Visualisierung der Korrelationsmatrix
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", center=0)
+    plt.title("Korrelation zwischen Wetter und Fahrradnutzung")
+    plt.tight_layout()
+    plt.savefig("weather_correlation.png")
+
+    # Wetterabhängige Nutzungsanalyse
+    fig, axes = plt.subplots(2, 2, figsize=(15, 15))
+
+    # Temperatur
+    sns.regplot(data=daily_data, x="max.temp", y="gesamt", ax=axes[0, 0])
+    axes[0, 0].set_title("Temperatureinfluss auf Nutzung")
+
+    # Niederschlag mit Schwellenwert
+    sns.regplot(data=daily_data, x="niederschlag", y="gesamt", ax=axes[0, 1])
+    axes[0, 1].set_title("Niederschlagseinfluss auf Nutzung")
+
+    # Sonnenstunden
+    sns.regplot(data=daily_data, x="sonnenstunden", y="gesamt", ax=axes[1, 0])
+    axes[1, 0].set_title("Einfluss der Sonnenstunden")
+
+    # Bewölkung
+    sns.regplot(data=daily_data, x="bewoelkung", y="gesamt", ax=axes[1, 1])
+    axes[1, 1].set_title("Bewölkungseinfluss auf Nutzung")
+
+    plt.tight_layout()
+    plt.savefig("weather_detailed_analysis.png")
+    plt.close()
+
+    return corr_matrix
 
 
 def main():
@@ -211,7 +358,7 @@ def main():
     print("Lade Tagesdaten...")
     daily_data = load_all_years()
     print("Lade Viertelstundendaten...")
-    quarterly_data = load_quarterly_data()
+    # quarterly_data = load_quarterly_data()
 
     # Deskriptive Statistik erstellen
     create_descriptive_statistics(daily_data)
@@ -219,7 +366,15 @@ def main():
     # Daten bereinigen
     print("Bereinige Daten...")
     daily_data = clean_data(daily_data)
-    quarterly_data = clean_data(quarterly_data)  #
+    # quarterly_data = clean_data(quarterly_data)
+
+    # Analysen durchführen
+    print("\nFühre Analysen durch...")
+    outage_analysis = analyze_outages(daily_data)
+    usage_trends = analyze_usage_trends(daily_data)
+    weather_impact = analyze_weather_impact(daily_data)
+
+    print("\nAnalysen abgeschlossen. Visualisierungen wurden gespeichert.")
 
 
 if __name__ == "__main__":
