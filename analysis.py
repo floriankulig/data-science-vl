@@ -8,6 +8,7 @@ import calendar
 
 # TODO: Default-Wert für year_range ändern
 DEFAULT_YEAR_RANGE = [2008, 2016]
+PLOT_PATH = "plots/"
 
 dtypes = {
     "datum": str,
@@ -238,7 +239,7 @@ def analyze_outages(daily_data):
     plt.ylabel("Anzahl")
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
-    plt.savefig("outage_types.png")
+    plt.savefig(PLOT_PATH + "outage_types.png")
     plt.close()
 
     # Zeitliche Entwicklung der Ausfälle
@@ -259,7 +260,7 @@ def analyze_outages(daily_data):
     plt.ylabel("Anzahl Ausfälle")
     plt.legend(title="Jahr", bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.tight_layout()
-    plt.savefig("outages_timeline.png")
+    plt.savefig(PLOT_PATH + "outages_timeline.png")
     plt.close()
 
     return monthly_outages
@@ -308,7 +309,7 @@ def analyze_usage_trends(daily_data):
     ax2.legend(loc="upper left")
 
     plt.tight_layout()
-    plt.savefig("yearly_usage_trends.png", dpi=300, bbox_inches="tight")
+    plt.savefig(PLOT_PATH + "yearly_usage_trends.png", dpi=300, bbox_inches="tight")
     plt.close()
 
     return yearly_usage
@@ -325,7 +326,7 @@ def analyze_weather_impact(daily_data):
     sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", center=0)
     plt.title("Korrelation zwischen Wetter und Fahrradnutzung")
     plt.tight_layout()
-    plt.savefig("weather_correlation.png")
+    plt.savefig(PLOT_PATH + "weather_correlation.png")
 
     # Wetterabhängige Nutzungsanalyse
     fig, axes = plt.subplots(2, 2, figsize=(15, 15))
@@ -347,7 +348,7 @@ def analyze_weather_impact(daily_data):
     axes[1, 1].set_title("Bewölkungseinfluss auf Nutzung")
 
     plt.tight_layout()
-    plt.savefig("weather_detailed_analysis.png")
+    plt.savefig(PLOT_PATH + "weather_detailed_analysis.png")
     plt.close()
 
     return corr_matrix
