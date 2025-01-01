@@ -76,7 +76,7 @@ def interpolate_plausible_values(df: pd.DataFrame):
     for i in df.index:
         if df.at[i, "kommentar"] in {
             "Baustelle",
-            "Radweg vereist / nach Schneefall nicht geräumt / keine Messung möglich",
+            "Eis/Schnee",
             "Zählstelle noch nicht in Betrieb",
         }:
             df.at[i, "richtung_1"] = df.at[i, "richtung_2"] = df.at[i, "gesamt"] = 0
@@ -101,6 +101,12 @@ def clean_data(df):
 
     # NA bei Kommentaren durch Leerstring ersetzen
     df["kommentar"] = df["kommentar"].fillna("Kein Kommentar")
+
+    # Kommentare vereinheitlichen
+    df["kommentar"] = df["kommentar"].replace(
+        "Radweg vereist / nach Schneefall nicht geräumt / keine Messung möglich",
+        "Eis/Schnee",
+    )
 
     # Negative Werte in relevanten Spalten durch NaN ersetzen
     numeric_columns = [
@@ -221,49 +227,108 @@ def format_number(x, p):
 
 
 def analyze_outages(daily_data):
-    """Analysiert die Ausfallzeiten mit detaillierten Visualisierungen"""
-    # plt.style.use("whitegrid")
-
-    # Ausfälle nach Typ gruppieren
-    outage_types = (
-        daily_data[daily_data["kommentar"] != "Kein Kommentar"]
-        .groupby("kommentar")
-        .size()
-    )
-
-    # Visualisierung der Ausfalltypen
-    plt.figure(figsize=(15, 6))
-    outage_types.plot(kind="bar")
-    plt.title("Verteilung der Ausfalltypen")
-    plt.xlabel("Ausfallgrund")
-    plt.ylabel("Anzahl")
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    plt.savefig(PLOT_PATH + "outage_types.png")
-    plt.close()
+    """Analysiert die Ausfallzeiten mit einer Heatmap und Balkendiagramm"""
 
     # Zeitliche Entwicklung der Ausfälle
     daily_data["year"] = daily_data["datum"].dt.year
     daily_data["month"] = daily_data["datum"].dt.month
 
-    monthly_outages = (
-        daily_data[daily_data["kommentar"] != "Kein Kommentar"]
-        .groupby(["year", "month"])
-        .size()
-        .reset_index(name="outages")
+    # Filtere "Zählstelle noch nicht in Betrieb" aus der Analyse aus
+    filtered_data = daily_data[
+        daily_data["kommentar"] != "Zählstelle noch nicht in Betrieb"
+    ]
+
+    # Create figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[1, 0.5])
+
+    # 1. Heatmap der Ausfälle
+    all_years = sorted(daily_data["year"].unique())
+    all_months = range(1, 13)
+
+    pivot_data = filtered_data[
+        filtered_data["kommentar"] != "Kein Kommentar"
+    ].pivot_table(
+        index="year", columns="month", values="kommentar", aggfunc="count", fill_value=0
+    )
+    # Füge fehlende Jahre Monate hinzu (, die keine Ausfälle hatten)
+    complete_index = pd.Index(all_years, name="year")
+    complete_columns = pd.Index(all_months, name="month")
+    pivot_data = pivot_data.reindex(
+        index=complete_index, columns=complete_columns, fill_value=0
     )
 
-    plt.figure(figsize=(15, 6))
-    sns.lineplot(data=monthly_outages, x="month", y="outages", hue="year")
-    plt.title("Entwicklung der Ausfälle über die Zeit")
-    plt.xlabel("Monat")
-    plt.ylabel("Anzahl Ausfälle")
-    plt.legend(title="Jahr", bbox_to_anchor=(1.05, 1), loc="upper left")
+    sns.heatmap(
+        pivot_data,
+        ax=ax1,
+        cmap="Reds",
+        fmt="d",
+        vmax=30,  # Monate mit nur 30 Tagen sollen auch vollrot sein
+        annot=True,
+        cbar_kws={"label": "Anzahl Ausfälle"},
+        xticklabels=[calendar.month_abbr[i] for i in range(1, 13)],
+    )
+
+    for year in all_years:
+        for month in all_months:
+            mask = (
+                (filtered_data["year"] == year)
+                & (filtered_data["month"] == month)
+                & (filtered_data["kommentar"] != "Kein Kommentar")
+            )
+            reasons = filtered_data[mask]["kommentar"].value_counts()
+
+            # Calculate position in the heatmap
+            i = all_years.index(year)
+            j = month - 1
+
+            if not reasons.empty:
+                # Create compact reason string
+                reason_str = "\n".join(
+                    f"{reason[:10]}: {count}" for reason, count in reasons.items()
+                )
+
+                # Add text with small font
+                ax1.text(
+                    j + 0.5,
+                    i + 0.7,
+                    reason_str,
+                    ha="center",
+                    va="center",
+                    fontsize=7,
+                    color=(
+                        "black"
+                        if pivot_data.iloc[i, j] < pivot_data.max().max() / 2
+                        else "white"
+                    ),
+                )
+
+    ax1.set_title("Heatmap der Ausfalltage pro Monat und Jahr", pad=20)
+    ax1.set_xlabel("Monat")
+    ax1.set_ylabel("Jahr")
+
+    # 2. Balkendiagramm der Ausfalltypen (ohne "Zählstelle noch nicht in Betrieb")
+    outage_types = (
+        filtered_data[filtered_data["kommentar"] != "Kein Kommentar"]
+        .groupby("kommentar")
+        .size()
+    )
+
+    # Plot horizontal bar chart
+    outage_types.plot(kind="barh", ax=ax2, color="steelblue")
+
+    ax2.set_title("Verteilung der Ausfalltypen")
+    ax2.set_xlabel("Anzahl")
+    ax2.set_ylabel("Ausfallgrund")
+
+    # Add value labels to bars
+    for i, v in enumerate(outage_types):
+        ax2.text(v, i, f" {v}", va="center")
+
     plt.tight_layout()
-    plt.savefig(PLOT_PATH + "outages_timeline.png")
+    plt.savefig(PLOT_PATH + "outage_analysis.png", dpi=300, bbox_inches="tight")
     plt.close()
 
-    return monthly_outages
+    return pivot_data, outage_types
 
 
 def analyze_usage_trends(daily_data):
