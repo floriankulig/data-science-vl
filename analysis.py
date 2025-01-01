@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
+# TODO: Default-Wert für year_range ändern
+DEFAULT_YEAR_RANGE = [2008, 2024]
+
 dtypes = {
     "datum": str,
     "zaehlstelle": str,
@@ -19,13 +22,13 @@ dtypes = {
 }
 
 
-def load_all_years(year_range=[2008, 2024]):
+def load_all_years(year_range=DEFAULT_YEAR_RANGE):
+    """Lädt die Tagesdaten für mehrere Jahre"""
     dfs = []
     years = range(year_range[0], year_range[1])
     for year in years:
         file_path = f"data_raw/rad_{year}_tage_19_06_23_r.csv"
         df = pd.read_csv(file_path, dtype=dtypes)
-        # Datum in datetime umwandeln
         df["datum"] = pd.to_datetime(df["datum"])
         dfs.append(df)
 
@@ -36,15 +39,15 @@ def load_all_years(year_range=[2008, 2024]):
     return df
 
 
-# TODO: Default-Wert für year_range ändern
-def load_quarterly_data(year_range=[2008, 2010]):
+def load_quarterly_data(year_range=DEFAULT_YEAR_RANGE):
+    """Lädt die 15-Minuten-Daten für mehrere Jahre"""
     dfs = []
     years = range(year_range[0], year_range[1])
     for year in years:
         file_path = f"data_raw/rad_{year}_15min_06_06_23_r.csv"
         df = pd.read_csv(file_path, dtype=dtypes)
 
-        # Datum in datetime umwandeln
+        # Zeit-Spalten erstellen
         df["time_start"] = pd.to_datetime(df["datum"] + " " + df["uhrzeit_start"])
         df["time_end"] = pd.to_datetime(df["datum"] + " " + df["uhrzeit_ende"])
         df = df.drop(["datum", "uhrzeit_start", "uhrzeit_ende"], axis=1)
@@ -59,72 +62,53 @@ def load_quarterly_data(year_range=[2008, 2010]):
 
 # Anhand von Kommentar richtung1 und richtung2 bestimmen
 def interpolate_plausible_values(df: pd.DataFrame):
+    """Bereinigt und interpoliert Werte basierend auf Kommentaren"""
+    # Berechne Mediane pro Zählstelle
+    medians = df.groupby("zaehlstelle").agg(
+        {"richtung_1": "median", "richtung_2": "median"}
+    )
+    print(medians)
     for i in df.index:
         if df.at[i, "kommentar"] in {
             "Baustelle",
             "Radweg vereist / nach Schneefall nicht geräumt / keine Messung möglich",
             "Zählstelle noch nicht in Betrieb",
         }:
-            # "Baustelle" oder "Radweg vereist / nach Schneefall nicht geräumt / keine Messung möglich" --> 0en
             df.at[i, "richtung_1"] = df.at[i, "richtung_2"] = df.at[i, "gesamt"] = 0
-            print(
-                "Kommentar: "
-                + df.at[i, "kommentar"]
-                + "; date: "
-                + str(df.at[i, "datum"])
-                + "; stelle: "
-                + df.at[i, "zaehlstelle"]
-            )
         elif df.at[i, "kommentar"] in {
             "Ausfall",
             "Austausch Sensor",
             "Ausfall, baustellenbedingte Demontage  ",
             "Ausfall nach Beschädigung",
         }:
-            # "Ausfall" oder "Austausch Sensor" oder "Ausfall, baustellenbedingte Demontage  " "Ausfall nach Beschädigung"--> Mittelwert
-            median1: float = df["richtung_1"].median(skipna=True, numeric_only=True)
+            median1 = medians.loc[df.at[i, "zaehlstelle"], "richtung_1"]
+            median2 = medians.loc[df.at[i, "zaehlstelle"], "richtung_2"]
             df.at[i, "richtung_1"] = median1
-
-            median2: float = df["richtung_2"].median(skipna=True, numeric_only=True)
             df.at[i, "richtung_2"] = median2
-
             df.at[i, "gesamt"] = median1 + median2
-            print(
-                "Kommentar: "
-                + df.at[i, "kommentar"]
-                + "; date: "
-                + str(df.at[i, "datum"])
-                + "; stelle: "
-                + df.at[i, "zaehlstelle"]
-            )
-        elif df.at[i, "kommentar"] in {"Kein Kommentar"}:
-            print("Kein Kommentar")
-        else:
-            print(
-                "Hinweis: unbekanntes Kommentar"
-                + " date: "
-                + str(df.at[i, "datum"])
-                + "; stelle: "
-                + df.at[i, "zaehlstelle"]
-            )
     return df
 
 
 def clean_data(df):
     # Datum in datetime umwandeln
-    df["datum"] = pd.to_datetime(df["datum"])
+    if "datum" in df.columns:
+        df["datum"] = pd.to_datetime(df["datum"])
 
     # NA bei Kommentaren durch Leerstring ersetzen
     df["kommentar"] = df["kommentar"].fillna("Kein Kommentar")
 
     # Negative Werte in relevanten Spalten durch NaN ersetzen
     numeric_columns = [
-        "richtung_1",
-        "richtung_2",
-        "gesamt",
-        "niederschlag",
-        "bewoelkung",
-        "sonnenstunden",
+        col
+        for col in [
+            "richtung_1",
+            "richtung_2",
+            "gesamt",
+            "niederschlag",
+            "bewoelkung",
+            "sonnenstunden",
+        ]
+        if col in df.columns
     ]
     for col in numeric_columns:
         # Bereinigung: Ersetze negative Werte durch NaN in relevanten Spalten
@@ -164,19 +148,23 @@ def create_descriptive_statistics(df):
 
     # 3. Statistische Kennzahlen für numerische Spalten
     print("\n=== STATISTISCHE KENNZAHLEN ===")
-    numeric_stats = df[
-        [
-            # Richtungen sind für die Gesamtstatistik nicht relevant, da diese sehr stark von den jeweiligen Zählstellen abhängen
-            # "richtung_1",
-            # "richtung_2",
-            "gesamt",
-            "min.temp",
-            "max.temp",
-            "niederschlag",
-            "bewoelkung",
-            "sonnenstunden",
+    numeric_stats = (
+        df[
+            [
+                # Richtungen sind für die Gesamtstatistik nicht relevant, da diese sehr stark von den jeweiligen Zählstellen abhängen
+                # "richtung_1",
+                # "richtung_2",
+                "gesamt",
+                "min.temp",
+                "max.temp",
+                "niederschlag",
+                "bewoelkung",
+                "sonnenstunden",
+            ]
         ]
-    ].describe()
+        .describe()
+        .round(2)
+    )
     print("\nZählungen und Wetterdaten:")
     print(numeric_stats)
 
@@ -205,16 +193,33 @@ def create_descriptive_statistics(df):
         .corr()["gesamt"]
         .round(2)
     )
-    print(weather_correlations)
+    weather_correlations_df = weather_correlations.to_frame(name="Korrelation")
+    weather_correlations_df["Erklärung"] = weather_correlations_df["Korrelation"].apply(
+        lambda x: (
+            "positiver Zusammenhang"
+            if x > 0
+            else ("negativer Zusammenhang" if x < 0 else "kein Zusammenhang")
+        )
+    )
+
+    print(weather_correlations_df)
+    # print(weather_correlations)
 
 
 def main():
-    # Daten laden und bereinigen
-    # df = load_all_years()
-    df = load_quarterly_data()
+    # Daten laden
+    print("Lade Tagesdaten...")
+    daily_data = load_all_years()
+    print("Lade Viertelstundendaten...")
+    quarterly_data = load_quarterly_data()
 
     # Deskriptive Statistik erstellen
-    # create_descriptive_statistics(df)
+    create_descriptive_statistics(daily_data)
+
+    # Daten bereinigen
+    print("Bereinige Daten...")
+    daily_data = clean_data(daily_data)
+    quarterly_data = clean_data(quarterly_data)  #
 
 
 if __name__ == "__main__":
