@@ -1,13 +1,14 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 from datetime import datetime
 from matplotlib.ticker import FuncFormatter
 import calendar
 
 # TODO: Default-Wert für year_range ändern
-DEFAULT_YEAR_RANGE = [2008, 2016]
+DEFAULT_YEAR_RANGE = [2008, 2013]
 PLOT_PATH = "plots/"
 
 dtypes = {
@@ -159,23 +160,18 @@ def create_descriptive_statistics(df):
 
     # 3. Statistische Kennzahlen für numerische Spalten
     print("\n=== STATISTISCHE KENNZAHLEN ===")
-    numeric_stats = (
-        df[
-            [
-                # Richtungen sind für die Gesamtstatistik nicht relevant, da diese sehr stark von den jeweiligen Zählstellen abhängen
-                # "richtung_1",
-                # "richtung_2",
-                "gesamt",
-                "min.temp",
-                "max.temp",
-                "niederschlag",
-                "bewoelkung",
-                "sonnenstunden",
-            ]
-        ]
-        .describe()
-        .round(2)
-    )
+    interesting_columns = [
+        # Richtungen sind für die Gesamtstatistik nicht relevant, da diese sehr stark von den jeweiligen Zählstellen abhängen
+        # "richtung_1",
+        # "richtung_2",
+        "gesamt",
+        "min.temp",
+        "max.temp",
+        "niederschlag",
+        "bewoelkung",
+        "sonnenstunden",
+    ]
+    numeric_stats = df[interesting_columns].describe().round(2)
     print("\nZählungen und Wetterdaten:")
     print(numeric_stats)
 
@@ -190,20 +186,7 @@ def create_descriptive_statistics(df):
 
     # 6. Wetter-Korrelationen
     print("\n=== KORRELATIONEN GESAMTFAHRTEN MIT WETTERDATEN ===")
-    weather_correlations = (
-        df[
-            [
-                "gesamt",
-                "min.temp",
-                "max.temp",
-                "niederschlag",
-                "bewoelkung",
-                "sonnenstunden",
-            ]
-        ]
-        .corr()["gesamt"]
-        .round(2)
-    )
+    weather_correlations = df[interesting_columns].corr()["gesamt"].round(2)
     weather_correlations_df = weather_correlations.to_frame(name="Korrelation")
     weather_correlations_df["Erklärung"] = weather_correlations_df["Korrelation"].apply(
         lambda x: (
@@ -410,65 +393,107 @@ def analyze_usage_trends(daily_data):
 
 
 # Visuelle Analysen für 3. Fragestellung: Wettereinfluss
-def analyze_weather_impact(daily_data):
-    """Erweiterte Wettereinfluss-Analyse mit Schwellenwerten"""
-    # Korrelationsmatrix
-    weather_cols = ["max.temp", "niederschlag", "sonnenstunden", "bewoelkung", "gesamt"]
-    corr_matrix = daily_data[weather_cols].corr()
+def analyze_usage_patterns(quarterly_data):
+    """
+    Analysiert die Nutzungsmuster über Tageszeit und Jahreszeiten.
 
-    # Visualisierung der Korrelationsmatrix
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr_matrix, annot=True, cmap="coolwarm", center=0)
-    plt.title("Korrelation zwischen Wetter und Fahrradnutzung")
+    Parameters:
+    quarterly_data (pd.DataFrame): DataFrame mit 15-Minuten-Daten
+    """
+
+    quarterly_data["gesamt"] = pd.to_numeric(quarterly_data["gesamt"], errors="coerce")
+
+    # Extrahiere Zeitinformationen
+    quarterly_data["hour"] = quarterly_data["time_start"].dt.hour
+    quarterly_data["month"] = quarterly_data["time_start"].dt.month
+
+    # Erstelle Figure mit Subplots
+    fig = plt.figure(figsize=(15, 12))
+    gs = fig.add_gridspec(2, 1, height_ratios=[1, 1])
+
+    # 1. Tagesverlauf (gemittelt über alle Jahre)
+    ax1 = fig.add_subplot(gs[0, :])
+    hourly_avg = quarterly_data.groupby("hour")["gesamt"].mean()
+    hourly_std = quarterly_data.groupby("hour")["gesamt"].std()
+
+    ax1.plot(
+        hourly_avg.index, hourly_avg.values, "b-", linewidth=2, label="Durchschnitt"
+    )
+    ax1.fill_between(
+        hourly_avg.index,
+        hourly_avg - hourly_std,
+        hourly_avg + hourly_std,
+        alpha=0.2,
+        color="blue",
+        label="Standardabweichung",
+    )
+
+    ax1.set_title("Durchschnittlicher Tagesverlauf der Fahrradnutzung", pad=20)
+    ax1.set_xlabel("Stunde")
+    ax1.set_ylabel("Durchschnittliche Anzahl Fahrräder")
+    ax1.set_xticks(range(0, 24, 2))
+    ax1.set_xticklabels([f"{h:02d}:00" for h in range(0, 24, 2)])
+    ax1.grid(True, alpha=0.2)
+    ax1.legend()
+
+    # 2. Heatmap: Stunde x Monat
+    ax2 = fig.add_subplot(gs[1, 0])
+
+    # Erstelle Pivot-Tabelle für Heatmap
+    pivot_data = quarterly_data.pivot_table(
+        values="gesamt", index="month", columns="hour", aggfunc="mean"
+    ).astype(float)
+
+    # Colormap (weiß zu dunkelblau)
+    colors = ["#ffffff", "#d4e6f1", "#7fb3d5", "#2980b9", "#1a5276"]
+    n_bins = 100
+    cmap = LinearSegmentedColormap.from_list("custom", colors, N=n_bins)
+
+    # Plotte Heatmap
+    sns.heatmap(
+        pivot_data,
+        cmap=cmap,
+        ax=ax2,
+        cbar_kws={"label": "Durchschnittliche Anzahl Fahrräder"},
+        yticklabels=[calendar.month_abbr[i] for i in range(1, 13)],
+        xticklabels=[f"{h:02d}:00" for h in range(24)],  # Stunden auf X-Achse
+        robust=True,
+    )
+
+    ax2.set_title("Fahrradnutzung nach Tageszeit und Monat", pad=20)
+    ax2.set_xlabel("Stunde")
+    ax2.set_ylabel("Monat")
+    # Labels rotieren
+    ax2.set_xticklabels(ax2.get_xticklabels(), rotation=45)
+    ax2.set_yticklabels(ax2.get_yticklabels(), rotation=0)
+
+    # Layout optimieren
     plt.tight_layout()
-    plt.savefig(PLOT_PATH + "weather_correlation.png")
-
-    # Wetterabhängige Nutzungsanalyse
-    fig, axes = plt.subplots(2, 2, figsize=(15, 15))
-
-    # Temperatur
-    sns.regplot(data=daily_data, x="max.temp", y="gesamt", ax=axes[0, 0])
-    axes[0, 0].set_title("Temperatureinfluss auf Nutzung")
-
-    # Niederschlag mit Schwellenwert
-    sns.regplot(data=daily_data, x="niederschlag", y="gesamt", ax=axes[0, 1])
-    axes[0, 1].set_title("Niederschlagseinfluss auf Nutzung")
-
-    # Sonnenstunden
-    sns.regplot(data=daily_data, x="sonnenstunden", y="gesamt", ax=axes[1, 0])
-    axes[1, 0].set_title("Einfluss der Sonnenstunden")
-
-    # Bewölkung
-    sns.regplot(data=daily_data, x="bewoelkung", y="gesamt", ax=axes[1, 1])
-    axes[1, 1].set_title("Bewölkungseinfluss auf Nutzung")
-
-    plt.tight_layout()
-    plt.savefig(PLOT_PATH + "weather_detailed_analysis.png")
+    plt.savefig(PLOT_PATH + "usage_patterns.png", dpi=300, bbox_inches="tight")
     plt.close()
-
-    return corr_matrix
 
 
 def main():
     # Daten laden
-    print("Lade Tagesdaten...")
-    daily_data = load_all_years()
+    # print("Lade Tagesdaten...")
+    # daily_data = load_all_years()
     print("Lade Viertelstundendaten...")
-    # quarterly_data = load_quarterly_data()
+    quarterly_data = load_quarterly_data()
 
     # Deskriptive Statistik erstellen
-    create_descriptive_statistics(daily_data)
+    # create_descriptive_statistics(daily_data)
 
     # Daten bereinigen
     print("Bereinige Daten...")
-    daily_data = clean_data(daily_data)
-    # quarterly_data = clean_data(quarterly_data)
+    # daily_data = clean_data(daily_data)
+    quarterly_data = clean_data(quarterly_data)
 
     # Analysen durchführen
     print("\nFühre Analysen durch...")
-    outage_analysis = analyze_outages(daily_data)
-    usage_trends = analyze_usage_trends(daily_data)
-    weather_impact = analyze_weather_impact(daily_data)
+    # outage_analysis = analyze_outages(daily_data)
+    # usage_trends = analyze_usage_trends(daily_data)
+    # weather_impact = analyze_weather_impact(daily_data)
+    analyze_usage_patterns(quarterly_data)
 
     print("\nAnalysen abgeschlossen. Visualisierungen wurden gespeichert.")
 

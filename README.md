@@ -25,4 +25,4 @@
 
 1.⁠ ⁠Wie hat sich die Ausfallzeit an den Radwegen über die Jahre entwickelt?
 2.⁠ ⁠Nimmt die Nutzung der Radwege zu?
-3.⁠ ⁠Wie beeinflussen Wetterbedingungen das tägliche Fahrradaufkommen?
+3.⁠ ⁠Wie verteilt sich das tägliche Fahrradaufkommen über den Tag / die Saisonalitäten?
