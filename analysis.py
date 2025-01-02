@@ -226,6 +226,7 @@ def format_number(x, p):
         return f"{x:.0f}"
 
 
+# Visuelle Analysen für 1. Fragestellung: Ausfallzeiten
 def analyze_outages(daily_data):
     """Analysiert die Ausfallzeiten mit einer Heatmap und Balkendiagramm"""
 
@@ -331,6 +332,7 @@ def analyze_outages(daily_data):
     return pivot_data, outage_types
 
 
+# Visuelle Analysen für 2. Fragestellung: Nutzungstrends
 def analyze_usage_trends(daily_data):
     """Analysiert die Nutzungstrends mit verschiedenen Zeitfenstern"""
     # Jahrestrend
@@ -340,15 +342,41 @@ def analyze_usage_trends(daily_data):
         .round(2)
     )
 
+    # Calculate CAGR
+    first_year = yearly_usage.index[0]
+    last_year = yearly_usage.index[-1]
+    first_value = yearly_usage.loc[first_year, "sum"]
+    last_value = yearly_usage.loc[last_year, "sum"]
+    years = last_year - first_year
+    cagr = pow(last_value / first_value, 1 / years) - 1
+
     # Visualisierung Jahrestrend
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12))
-
-    yearly_usage["sum"].plot(kind="bar", ax=ax1)
+    yearly_usage["sum"].plot(
+        kind="bar",
+        ax=ax1,
+    )
     ax1.set_title("Jährliche Gesamtnutzung")
     ax1.set_xlabel("Jahr")
     ax1.set_ylabel("Fahrten (jährlich)")
     ax1.yaxis.set_major_formatter(FuncFormatter(format_number))
     ax1.grid(axis="y", linestyle="-", alpha=0.3)
+    # CAGR als Text in der Ecke
+    legend_text = f"CAGR: {cagr:.1%}"
+    ax1.text(
+        0.02,
+        0.95,
+        legend_text,
+        transform=ax1.transAxes,
+        bbox=dict(
+            boxstyle="round",
+            facecolor="white",
+            alpha=0.8,
+            edgecolor="lightgrey",
+            pad=0.5,
+        ),
+        verticalalignment="top",
+    )
     plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
     line = ax2.plot(
@@ -380,6 +408,7 @@ def analyze_usage_trends(daily_data):
     return yearly_usage
 
 
+# Visuelle Analysen für 3. Fragestellung: Wettereinfluss
 def analyze_weather_impact(daily_data):
     """Erweiterte Wettereinfluss-Analyse mit Schwellenwerten"""
     # Korrelationsmatrix
