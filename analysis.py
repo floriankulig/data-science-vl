@@ -346,6 +346,8 @@ def analyze_usage_trends(daily_data):
     last_year = yearly_usage.index[-1]
     first_value = yearly_usage.loc[first_year, "sum"]
     last_value = yearly_usage.loc[last_year, "sum"]
+    # Passe den Wert für 2008 an (nur 6 Monate Daten)
+    first_value = first_value * 2 if first_year == 2008 else first_value
     years = last_year - first_year
     cagr = pow(last_value / first_value, 1 / years) - 1
 
