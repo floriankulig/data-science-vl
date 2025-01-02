@@ -263,7 +263,6 @@ def analyze_outages(daily_data):
         ax=ax1,
         cmap="Reds",
         fmt="d",
-        vmax=30,  # Monate mit nur 30 Tagen sollen auch vollrot sein
         annot=True,
         cbar_kws={"label": "Anzahl Ausfälle"},
         xticklabels=[calendar.month_abbr[i] for i in range(1, 13)],
