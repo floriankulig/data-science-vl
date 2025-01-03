@@ -8,7 +8,7 @@ from matplotlib.ticker import FuncFormatter
 import calendar
 
 # TODO: Default-Wert für year_range ändern
-DEFAULT_YEAR_RANGE = [2008, 2013]
+DEFAULT_YEAR_RANGE = [2008, 2024]
 PLOT_PATH = "plots/"
 
 dtypes = {
@@ -45,19 +45,55 @@ def load_all_years(year_range=DEFAULT_YEAR_RANGE):
     return df
 
 
-def load_quarterly_data(year_range=DEFAULT_YEAR_RANGE):
+def aggregate_hourly(df):
+    """Optimierte Version mit numpy"""
+    # Gruppiere zuerst nach den Schlüsseln
+    grouped = df.groupby(["datum", "zaehlstelle", "hour"])
+
+    # Berechne Summen mit numpy
+    sums = grouped.agg({"richtung_1": "sum", "richtung_2": "sum", "gesamt": "sum"})
+
+    # Berechne Kommentar-Aggregation separat
+    comments = grouped["kommentar"].agg(
+        lambda x: "; ".join(set(x.dropna())) if x.notna().any() else "NA"
+    )
+
+    # Finde Gruppen mit Kommentaren und 0-Summen
+    has_comments = grouped["kommentar"].apply(lambda x: x.notna().any())
+    zero_sums = (sums == 0).all(axis=1)
+
+    # Setze NA mit numpy
+    mask = has_comments & zero_sums
+    sums[mask] = pd.NA
+
+    result = pd.concat([sums, comments], axis=1)
+    return result.reset_index()
+
+
+def load_hourly_data(year_range=DEFAULT_YEAR_RANGE):
     """Lädt die 15-Minuten-Daten für mehrere Jahre"""
     dfs = []
     years = range(year_range[0], year_range[1])
+
+    def convert_to_hourly(df: pd.DataFrame):
+        """Konvertiert 15-Minuten-Daten in stündliche Daten"""
+        df["time_start"] = pd.to_datetime(df["datum"] + " " + df["uhrzeit_start"])
+        df["hour"] = df["time_start"].dt.hour
+        df["gesamt"] = df["richtung_1"] + df["richtung_2"]
+        hourly_data = aggregate_hourly(df)
+        hourly_data["time_start"] = pd.to_datetime(
+            hourly_data["datum"] + " " + hourly_data["hour"].astype(str) + ":00"
+        )
+        hourly_data = hourly_data.drop(["datum", "hour"], axis=1)
+        return hourly_data
+
     for year in years:
         file_path = f"data_raw/rad_{year}_15min_06_06_23_r.csv"
         df = pd.read_csv(file_path, dtype=dtypes)
+        print(f"\tLade Daten für {year}...")
 
-        # Zeit-Spalten erstellen
-        df["time_start"] = pd.to_datetime(df["datum"] + " " + df["uhrzeit_start"])
-        df["time_end"] = pd.to_datetime(df["datum"] + " " + df["uhrzeit_ende"])
-        df = df.drop(["datum", "uhrzeit_start", "uhrzeit_ende"], axis=1)
-        dfs.append(df)
+        df_hourly_aggregated = convert_to_hourly(df)
+        dfs.append(df_hourly_aggregated)
 
     df = pd.concat(dfs, ignore_index=True)
     df.sort_values("time_start", inplace=True)
@@ -70,10 +106,12 @@ def load_quarterly_data(year_range=DEFAULT_YEAR_RANGE):
 def interpolate_plausible_values(df: pd.DataFrame):
     """Bereinigt und interpoliert Werte basierend auf Kommentaren"""
     # Berechne Mediane pro Zählstelle
-    medians = df.groupby("zaehlstelle").agg(
-        {"richtung_1": "median", "richtung_2": "median"}
+    medians = (
+        df.groupby("zaehlstelle")
+        .agg({"richtung_1": "median", "richtung_2": "median"})
+        .round()
+        .astype(int)
     )
-    print(medians)
     for i in df.index:
         if df.at[i, "kommentar"] in {
             "Baustelle",
@@ -132,7 +170,7 @@ def clean_data(df):
     # JETZT: Fehlende Werte rauswerfen
     # df = df.dropna()
 
-    df.to_csv("data_cleaned.csv", index=False)
+    # df.to_csv("data_cleaned.csv", index=False)
 
     return df
 
@@ -273,7 +311,7 @@ def analyze_outages(daily_data):
                 # Add text with small font
                 ax1.text(
                     j + 0.5,
-                    i + 0.7,
+                    i + 0.8,
                     reason_str,
                     ha="center",
                     va="center",
@@ -475,25 +513,27 @@ def analyze_usage_patterns(quarterly_data):
 
 def main():
     # Daten laden
-    # print("Lade Tagesdaten...")
-    # daily_data = load_all_years()
-    print("Lade Viertelstundendaten...")
-    quarterly_data = load_quarterly_data()
+    print("Lade Tagesdaten...")
+    daily_data = load_all_years()
+    print("Lade Stundendaten...")
+    hourly_data = load_hourly_data()
+    # hourly_data = pd.read_csv("data_raw_quarterly.csv", dtype=dtypes)
+    # hourly_data["time_start"] = pd.to_datetime(hourly_data["time_start"])
 
     # Deskriptive Statistik erstellen
-    # create_descriptive_statistics(daily_data)
+    create_descriptive_statistics(daily_data)
 
     # Daten bereinigen
     print("Bereinige Daten...")
-    # daily_data = clean_data(daily_data)
-    quarterly_data = clean_data(quarterly_data)
+    daily_data = clean_data(daily_data)
+    hourly_data = clean_data(hourly_data)
 
     # Analysen durchführen
     print("\nFühre Analysen durch...")
-    # outage_analysis = analyze_outages(daily_data)
-    # usage_trends = analyze_usage_trends(daily_data)
+    outage_analysis = analyze_outages(daily_data)
+    usage_trends = analyze_usage_trends(daily_data)
     # weather_impact = analyze_weather_impact(daily_data)
-    analyze_usage_patterns(quarterly_data)
+    analyze_usage_patterns(hourly_data)
 
     print("\nAnalysen abgeschlossen. Visualisierungen wurden gespeichert.")
 
