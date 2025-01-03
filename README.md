@@ -35,7 +35,7 @@
 
 2. Aufgabe d):
 
-3. Aufgabe a) & c):
+3. Aufgabe e):
 
 ```bash
    python app_dash.py
