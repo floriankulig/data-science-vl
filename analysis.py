@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -572,6 +573,8 @@ def main():
 
     # Analysen durchführen
     print("\nFühre Analysen durch...")
+    print("Erstelle Ordner für Visualisierungen...")
+    os.makedirs(PLOT_PATH, exist_ok=True)
     outage_analysis = analyze_outages(daily_data)
     usage_trends = analyze_usage_trends(daily_data)
     # weather_impact = analyze_weather_impact(daily_data)
