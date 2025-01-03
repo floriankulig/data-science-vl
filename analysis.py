@@ -361,6 +361,24 @@ def analyze_usage_trends(daily_data):
         .agg(["sum", "mean", "std"])
         .round(2)
     )
+    # Anzahl der aktiven Zählstellen pro Jahr
+    inactive_stations = (
+        daily_data.groupby("zaehlstelle")
+        .agg({"kommentar": lambda x: (x == "Zählstelle noch nicht in Betrieb").all()})
+        .query("kommentar == True")
+        .index.tolist()
+    )
+
+    # Kopie der Daten ohne die inaktiven Zählstellen
+    active_data = daily_data[~daily_data["zaehlstelle"].isin(inactive_stations)].copy()
+
+    # Filtere Tage aus, an denen aktive Zählstellen noch nicht in Betrieb waren
+    active_data = active_data[
+        active_data["kommentar"] != "Zählstelle noch nicht in Betrieb"
+    ]
+    yearly_active_stations = active_data.groupby(active_data["datum"].dt.year)[
+        "zaehlstelle"
+    ].nunique()
 
     # Calculate CAGR
     first_year = yearly_usage.index[0]
@@ -371,20 +389,28 @@ def analyze_usage_trends(daily_data):
     first_value = first_value * 2 if first_year == 2008 else first_value
     years = last_year - first_year
     cagr = pow(last_value / first_value, 1 / years) - 1
+    cagr5y = (
+        (pow(last_value / yearly_usage.loc[yearly_usage.index[-5], "sum"], 1 / 5) - 1)
+        if len(yearly_usage) > 5
+        else cagr
+    )
+    cagr10y = (
+        (pow(last_value / yearly_usage.loc[yearly_usage.index[-10], "sum"], 1 / 10) - 1)
+        if len(yearly_usage) > 10
+        else cagr
+    )
 
     # Visualisierung Jahrestrend
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12))
-    yearly_usage["sum"].plot(
-        kind="bar",
-        ax=ax1,
-    )
+    bars = ax1.bar(yearly_usage.index, yearly_usage["sum"])
+
     ax1.set_title("Jährliche Gesamtnutzung")
     ax1.set_xlabel("Jahr")
     ax1.set_ylabel("Fahrten (jährlich)")
     ax1.yaxis.set_major_formatter(FuncFormatter(format_number))
     ax1.grid(axis="y", linestyle="-", alpha=0.3)
     # CAGR als Text in der Ecke
-    legend_text = f"CAGR: {cagr:.1%}"
+    legend_text = f"CAGR: {cagr:.1%}\nCAGR 5Y: {cagr5y:.1%}\nCAGR 10Y: {cagr10y:.1%}"
     ax1.text(
         0.02,
         0.95,
@@ -399,6 +425,25 @@ def analyze_usage_trends(daily_data):
         ),
         verticalalignment="top",
     )
+    # Zweite y-Achse für Zählstellen
+    ax3 = ax1.twinx()
+    ax3.plot(
+        yearly_usage.index,
+        yearly_active_stations.values,
+        color="lightgrey",
+        linewidth=3,
+        marker="o",
+        label="Aktive Zählstellen",
+    )
+    ax3.set_ylabel("Anzahl aktiver Zählstellen")
+    ax3.tick_params(axis="y", labelcolor="grey")
+
+    # Setze Grenzen für zweite y-Achse
+    ax3.set_ylim(
+        0,
+        max(yearly_active_stations.values) * 2,
+    )
+
     plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
     line = ax2.plot(
