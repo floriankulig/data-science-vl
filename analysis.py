@@ -7,11 +7,10 @@ from datetime import datetime
 from matplotlib.ticker import FuncFormatter
 import calendar
 
-# TODO: Default-Wert für year_range ändern
 DEFAULT_YEAR_RANGE = [2008, 2024]
 PLOT_PATH = "plots/"
 
-dtypes = {
+DTYPES = {
     "datum": str,
     "zaehlstelle": str,
     "uhrzeit_start": str,
@@ -34,7 +33,7 @@ def load_all_years(year_range=DEFAULT_YEAR_RANGE):
     years = range(year_range[0], year_range[1])
     for year in years:
         file_path = f"data_raw/rad_{year}_tage_19_06_23_r.csv"
-        df = pd.read_csv(file_path, dtype=dtypes)
+        df = pd.read_csv(file_path, dtype=DTYPES)
         df["datum"] = pd.to_datetime(df["datum"])
         dfs.append(df)
 
@@ -89,7 +88,7 @@ def load_hourly_data(year_range=DEFAULT_YEAR_RANGE):
 
     for year in years:
         file_path = f"data_raw/rad_{year}_15min_06_06_23_r.csv"
-        df = pd.read_csv(file_path, dtype=dtypes)
+        df = pd.read_csv(file_path, dtype=DTYPES)
         print(f"\tLade Daten für {year}...")
 
         df_hourly_aggregated = convert_to_hourly(df)
