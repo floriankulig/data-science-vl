@@ -517,8 +517,6 @@ def main():
     daily_data = load_all_years()
     print("Lade Stundendaten...")
     hourly_data = load_hourly_data()
-    # hourly_data = pd.read_csv("data_raw_quarterly.csv", dtype=dtypes)
-    # hourly_data["time_start"] = pd.to_datetime(hourly_data["time_start"])
 
     # Deskriptive Statistik erstellen
     create_descriptive_statistics(daily_data)
