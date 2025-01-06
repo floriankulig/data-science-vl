@@ -7,7 +7,7 @@
 1. Erstelle eine virtuelle Umgebung:
 
    ```bash
-   python -m venv venv   # Windows/Mac
+   python -m venv venv
    ```
 
 2. Aktiviere die virtuelle Umgebung:
@@ -32,6 +32,7 @@
 ```
 
 - Daten werden geladen und bereinigt
+- Standardmäßig werden alle Jahre von 2008-2023 in die Berechnung mit einbezogen. Dies kann über die Variable _DEFAULT_YEAR_RANGE_ geändert werden.
 - **Deskriptive Statstik** wird in der Konsole ausgegeben
 - **Visualisierungen zu den Fragestellungen** werden im Ordner _plots_ gespeichert
 
