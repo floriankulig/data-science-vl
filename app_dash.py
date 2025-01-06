@@ -34,7 +34,11 @@ def create_layout(df):
         [
             html.H1(
                 "Fahrrad-Zählstellen Dashboard",
-                style={"textAlign": "center", "color": "#2c3e50", "marginBottom": 30},
+                style={
+                    "textAlign": "center",
+                    "color": "#2c3e50",
+                    "marginBottom": 16,
+                },
             ),
             # Control Panel
             html.Div(
@@ -54,54 +58,98 @@ def create_layout(df):
                             ),
                         ],
                         style={
-                            "width": "30%",
+                            "width": "45%",
                             "display": "inline-block",
-                            "marginRight": "5%",
+                            "paddingInline": "2.5%",
                         },
                     ),
                     html.Div(
                         [
                             html.Label("Jahr auswählen:"),
-                            dcc.Slider(
-                                id="year-slider",
-                                min=df["year"].min(),
-                                max=df["year"].max(),
+                            dcc.Dropdown(
+                                id="year-dropdown",
+                                options=[
+                                    {"label": str(year), "value": year}
+                                    for year in sorted(df["year"].unique())
+                                ],
                                 value=df["year"].max(),
-                                marks={
-                                    str(year): str(year) for year in df["year"].unique()
-                                },
-                                step=None,
+                                clearable=False,
+                                style={"width": "100%"},
                             ),
                         ],
-                        style={"width": "60%", "display": "inline-block"},
+                        style={
+                            "width": "45%",
+                            "display": "inline-block",
+                            "paddingInline": "2.5%",
+                        },
                     ),
                 ],
-                style={"marginBottom": 30},
+                style={
+                    "marginBottom": 16,
+                    "position": "sticky",
+                    "top": 8,
+                    "backgroundColor": "rgba(152, 153, 155, 0.15)",
+                    "backdropFilter": "blur(16px)",
+                    "zIndex": 99,
+                    "padding": 16,
+                    "borderRadius": 16,
+                    "border": "1px solid #dfe6e9",
+                },
             ),
-            # Graphs
+            # Upper Row
             html.Div(
                 [
-                    # Daily counts graph
-                    html.Div(
-                        [dcc.Graph(id="daily-graph")],
-                        style={"width": "70%", "display": "inline-block"},
-                    ),
-                    # Monthly average graph
+                    dcc.Graph(
+                        id="daily-graph",
+                        style={"backgroundColor": "rgb(252, 253, 255)"},
+                    )
+                ],
+                style={
+                    "marginBottom": 16,
+                    "backgroundColor": "rgb(252, 253, 255)",
+                    "borderRadius": 16,
+                    "border": "1px solid #dfe6e9",
+                    "padding": 16,
+                },
+            ),
+            # Bottom Row
+            html.Div(
+                [
                     html.Div(
                         [dcc.Graph(id="monthly-graph")],
-                        style={"width": "30%", "display": "inline-block"},
+                        style={
+                            "width": "70%",
+                            "borderRadius": 16,
+                            "backgroundColor": "rgb(252, 253, 255)",
+                            "border": "1px solid #dfe6e9",
+                            "padding": 16,
+                        },
                     ),
-                ]
-            ),
-            # Statistics Panel
-            html.Div(
-                [
-                    html.H3("Statistiken", style={"textAlign": "center"}),
-                    html.Div(id="statistics-panel"),
+                    html.Div(
+                        [
+                            html.H3("Statistiken", style={"textAlign": "center"}),
+                            html.Div(id="statistics-panel"),
+                        ],
+                        style={
+                            "width": "30%",
+                            "borderRadius": 16,
+                            "backgroundColor": "rgb(252, 253, 255)",
+                            "border": "1px solid #dfe6e9",
+                            "padding": 16,
+                        },
+                    ),
                 ],
-                style={"marginTop": 30},
+                style={
+                    "display": "flex",
+                    "gap": 16,
+                    "justifyContent": "space-between",
+                },
             ),
-        ]
+        ],
+        style={
+            "fontFamily": "Arial, sans-serif",
+            "position": "relative",
+        },
     )
 
 
@@ -112,7 +160,7 @@ def create_layout(df):
         Output("monthly-graph", "figure"),
         Output("statistics-panel", "children"),
     ],
-    [Input("station-dropdown", "value"), Input("year-slider", "value")],
+    [Input("station-dropdown", "value"), Input("year-dropdown", "value")],
 )
 def update_graphs(selected_station, selected_year):
     # Filter data
@@ -141,7 +189,10 @@ def update_graphs(selected_station, selected_year):
         )
     )
     daily_fig.update_layout(
-        xaxis_title="Datum", yaxis_title="Anzahl Fahrräder", hovermode="x unified"
+        xaxis_title="Datum",
+        yaxis_title="Anzahl Fahrräder",
+        hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
 
     # Monthly Graph

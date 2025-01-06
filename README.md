@@ -1,5 +1,7 @@
 # Data Science Vorlesung
 
+[GitHub Repository](https://github.com/floriankulig/data-science-vl)
+
 ## Einrichtung
 
 1. Erstelle eine virtuelle Umgebung:
@@ -34,6 +36,8 @@
 - **Visualisierungen zu den Fragestellungen** werden im Ordner _plots_ gespeichert
 
 2. Aufgabe d):
+
+- auswertung_muenchen_praesentation.pdf öffnen
 
 3. Aufgabe e):
 
