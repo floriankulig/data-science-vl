@@ -48,8 +48,10 @@
 
 - Dash-App unter [http://127.0.0.1:8050](http://127.0.0.1:8050) aufrufen
 
-## Fragestellungen
+## Fragestellungen <sub><sup>(Aufgabe b)<sup><sub>
 
 1.⁠ ⁠Wie hat sich die Ausfallzeit an den Radwegen über die Jahre entwickelt?
+
 2.⁠ ⁠Nimmt die Nutzung der Radwege zu?
+
 3.⁠ ⁠Wie verteilt sich das tägliche Fahrradaufkommen über den Tag / die Saisonalitäten?
