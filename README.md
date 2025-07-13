@@ -1,4 +1,4 @@
-# Data Science Vorlesung
+# Data Science Münchens Fahrradverkehr
 
 [GitHub Repository](https://github.com/floriankulig/data-science-vl)
 
